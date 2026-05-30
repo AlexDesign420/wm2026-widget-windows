@@ -69,7 +69,7 @@ Data files live in `%APPDATA%\wm2026\` and are **never** committed (see `.gitign
 | **Windows 10 / 11** | Uses `System.Speech` (TTS), `winsound`, Windows Shell API |
 | **[Lively Wallpaper](https://livelywallpaper.app/)** | Free animated/web wallpaper host |
 | **Python 3.10+** | Installed via the official installer (provides the `py` launcher) |
-| **[mpv](https://mpv.io)** | Audio playback · on `PATH` or in a standard location |
+| **[mpv](https://mpv.io)** | Audio playback — **automatically installed by `install.ps1`** (via winget) |
 
 ---
 
@@ -92,6 +92,8 @@ Then:
 4. Activate the wallpaper in Lively.
 
 The widget connects to the local server automatically and shows an "offline" banner with start instructions until the server is running.
+
+> **Scrolling the schedule:** Lively does not forward the mouse wheel to web wallpapers ([lively#853](https://github.com/rocksdanister/lively/issues/853)). Move the cursor to the **top or bottom edge** of the list to auto-scroll (faster the closer to the edge). This works purely via mouse-movement, which Lively does forward.
 
 ---
 
@@ -194,7 +196,10 @@ Start the backend: run `start_server.bat` or `start_server_hidden.vbs`. The widg
 The server needs a moment to probe all streams on first launch. Wait ~10 seconds.
 
 **No audio / "failed to start audio"**
-Make sure mpv is installed and on your `PATH` (`mpv --version`). The server also checks common install locations (Program Files, Scoop).
+mpv is installed automatically by `install.ps1`. If audio still fails, verify mpv is reachable (`mpv --version`); the server checks `PATH` and common install locations (Program Files\MPV Player, Scoop). Open a new terminal so an updated `PATH` takes effect.
+
+**Can't scroll the schedule**
+The mouse wheel is not forwarded to Lively web wallpapers. Move the cursor to the top/bottom edge of the list to auto-scroll.
 
 **TTS says nothing**
 Install a German voice under *Settings → Time & Language → Speech*. Use the **▶ Test** button to verify.
