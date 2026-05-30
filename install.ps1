@@ -28,6 +28,11 @@ if ($python) {
   throw "Python Launcher 'py' wurde nicht gefunden. Bitte Python 3 installieren."
 }
 
+if (-not (Get-Command mpv -ErrorAction SilentlyContinue)) {
+  Write-Host "mpv wird installiert (fuer Audio-Streams)..."
+  winget install --id shinchiro.mpv --accept-source-agreements --accept-package-agreements
+}
+
 Write-Host ""
 Write-Host "Fertig."
 Write-Host "1. Lively Wallpaper installieren."
