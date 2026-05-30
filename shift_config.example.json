@@ -1,0 +1,17 @@
+{
+  "_comment": "Copy this file to %APPDATA%/wm2026/shift_config.json and adjust the icon names and positions to match your Windows desktop layout. 'closed' is the normal position, 'open' is the position when the ticker side panel opens.",
+  "icons": {
+    "Chrome.lnk": {
+      "closed": [24, 32],
+      "open": [320, 32]
+    },
+    "Explorer.lnk": {
+      "closed": [24, 112],
+      "open": [320, 112]
+    },
+    "Recycle Bin": {
+      "closed": [24, 192],
+      "open": [320, 192]
+    }
+  }
+}
