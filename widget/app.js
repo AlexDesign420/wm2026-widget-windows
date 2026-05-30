@@ -337,7 +337,58 @@ function renderStatusBanner() {
   `;
 }
 
+let _scrollTop = 0;
+let _mx = null, _my = null;
+const _drag = { el: null, y: 0, top: 0 };
+const _scrollSel = ".scroll, .sp-scroll, .streams-scroll, .comments-list";
+function _scrollTarget() {
+  if (_mx != null) {
+    const t = document.elementFromPoint(_mx, _my);
+    const el = t && t.closest(_scrollSel);
+    if (el) return el;
+  }
+  return document.querySelector(".scroll");
+}
+document.addEventListener("mousedown", (e) => {
+  const el = e.target.closest(_scrollSel);
+  if (el) { _drag.el = el; _drag.y = e.clientY; _drag.top = el.scrollTop; }
+});
+document.addEventListener("mousemove", (e) => {
+  _mx = e.clientX; _my = e.clientY;
+  if (!_drag.el) return;
+  _drag.el.scrollTop = _drag.top - (e.clientY - _drag.y);
+  if (_drag.el.classList.contains("scroll")) _scrollTop = _drag.el.scrollTop;
+});
+document.addEventListener("mouseup", () => { _drag.el = null; });
+try {
+  const _es = new EventSource(`${SERVER_URL}/api/wheel_stream`);
+  _es.onmessage = (ev) => {
+    const el = _scrollTarget();
+    if (!el) return;
+    el.scrollTop -= (parseInt(ev.data, 10) || 0);
+    if (el.classList.contains("scroll")) _scrollTop = el.scrollTop;
+  };
+} catch (e) {}
+
+// Edge auto-scroll: relies only on mouse-move, which Lively forwards (wheel is not).
+setInterval(() => {
+  if (_drag.el || _mx == null) return;
+  const t = document.elementFromPoint(_mx, _my);
+  const el = t && t.closest(_scrollSel);
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  const zone = Math.max(30, Math.min(80, r.height * 0.18));
+  let d = 0;
+  if (_my > r.bottom - zone) d = Math.ceil(((_my - (r.bottom - zone)) / zone) * 16) + 3;
+  else if (_my < r.top + zone) d = -(Math.ceil((((r.top + zone) - _my) / zone) * 16) + 3);
+  if (!d) return;
+  el.scrollTop += d;
+  if (el.classList.contains("scroll")) _scrollTop = el.scrollTop;
+}, 16);
+
 function render() {
+  const _prev = document.querySelector(".scroll");
+  if (_prev) _scrollTop = _prev.scrollTop;
   if (state.wallpaper) {
     document.body.style.backgroundImage = `url("${SERVER_URL}/api/wallpaper_image?u=${encodeURIComponent(state.wallpaper)}"), var(--bg-body)`;
   } else {
@@ -454,7 +505,7 @@ function render() {
                             ${COUNTRY_FLAGS[stream.country] || "🌍"} ${esc(stream.name)}
                             <span style="color:#4b5563;margin-left:5px">${esc((stream.language || "").toUpperCase())}</span>
                           </div>
-                          <div class="la-btn la-radio" style="flex:0 0 auto" onclick="WM2026.${playing ? "stopAudio()" : `playStream(${JSON.stringify(stream.url)})`}">${playing ? "⏹" : "▶"}</div>
+                          <div class="la-btn la-radio" style="flex:0 0 auto" onclick="WM2026.${playing ? "stopAudio()" : `playStream('${esc(stream.url)}')`}">${playing ? "⏹" : "▶"}</div>
                         </div>`;
                     }).join("")}
                   </div>`}
@@ -561,6 +612,8 @@ function render() {
       ${renderStatusBanner()}
     </div>
   `;
+  const _now = document.querySelector(".scroll");
+  if (_now) _now.scrollTop = _scrollTop;
 }
 
 window.addEventListener("resize", render);

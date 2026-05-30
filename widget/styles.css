@@ -297,7 +297,9 @@ body::before {
 
 .streams-scroll { max-height: 240px; display: flex; flex-direction: column; gap: 6px; padding-right: 2px; }
 .comments-list { max-height: 200px; }
-.scroll { flex: 1; }
+.scroll { flex: 1; min-height: 0; cursor: grab; }
+.sp-scroll { flex: 1; min-height: 0; cursor: grab; }
+.scroll:active, .sp-scroll:active { cursor: grabbing; }
 
 .streams-scroll::-webkit-scrollbar,
 .scroll::-webkit-scrollbar,
