@@ -124,7 +124,7 @@
     {
       "id": "franceinter",
       "name": "France Inter",
-      "country": "fr",
+      "country": "FR",
       "language": "fr",
       "type": "static",
       "url": "https://icecast.radiofrance.fr/franceinter-midfi.mp3"
