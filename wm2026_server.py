@@ -29,7 +29,8 @@ from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
-from flask import Flask, jsonify, request, send_file
+from ctypes import wintypes
+from flask import Flask, Response, jsonify, request, send_file
 
 
 BASE_DIR = Path(os.environ.get("APPDATA", Path.home())) / "wm2026"
@@ -118,6 +119,8 @@ def _find_mpv() -> str:
     candidates = [
         r"C:\Program Files\mpv\mpv.exe",
         r"C:\Program Files (x86)\mpv\mpv.exe",
+        r"C:\Program Files\MPV Player\mpv.exe",
+        r"C:\Program Files\mpv.net\mpvnet.exe",
         os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "mpv", "mpv.exe"),
         os.path.join(os.environ.get("USERPROFILE", ""), "scoop", "apps", "mpv", "current", "mpv.exe"),
         os.path.join(os.environ.get("USERPROFILE", ""), "scoop", "shims", "mpv.exe"),
@@ -650,6 +653,68 @@ def engine_loop():
 
 
 # ---------------------------------------------------------------------------
+# Global mouse-wheel forwarding
+# Lively does not forward wheel events to desktop wallpapers (issue #853), so
+# we capture them with a low-level hook and expose the delta to the widget.
+# ---------------------------------------------------------------------------
+
+_wheel = {"total": 0}
+
+
+def mouse_wheel_hook_loop():
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    WH_MOUSE_LL = 14
+    WM_MOUSEWHEEL = 0x020A
+    LRESULT = ctypes.c_ssize_t
+    desktop_classes = {"SysListView32", "SHELLDLL_DefView", "WorkerW", "Progman"}
+
+    class POINT(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+
+    class MSLLHOOKSTRUCT(ctypes.Structure):
+        _fields_ = [
+            ("pt", POINT),
+            ("mouseData", ctypes.c_uint),
+            ("flags", ctypes.c_uint),
+            ("time", ctypes.c_uint),
+            ("dwExtraInfo", ctypes.c_void_p),
+        ]
+
+    HOOKPROC = ctypes.WINFUNCTYPE(LRESULT, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
+    user32.WindowFromPoint.restype = ctypes.c_void_p
+    user32.WindowFromPoint.argtypes = [POINT]
+    user32.CallNextHookEx.restype = LRESULT
+    user32.CallNextHookEx.argtypes = [ctypes.c_void_p, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM]
+    user32.SetWindowsHookExW.restype = ctypes.c_void_p
+    user32.SetWindowsHookExW.argtypes = [ctypes.c_int, HOOKPROC, ctypes.c_void_p, wintypes.DWORD]
+    kernel32.GetModuleHandleW.restype = ctypes.c_void_p
+    kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+
+    def over_desktop(pt):
+        hwnd = user32.WindowFromPoint(pt)
+        if not hwnd:
+            return False
+        buf = ctypes.create_unicode_buffer(256)
+        user32.GetClassNameW(ctypes.c_void_p(hwnd), buf, 256)
+        return buf.value in desktop_classes
+
+    def proc(n_code, w_param, l_param):
+        if n_code == 0 and w_param == WM_MOUSEWHEEL:
+            info = ctypes.cast(l_param, ctypes.POINTER(MSLLHOOKSTRUCT)).contents
+            if over_desktop(info.pt):
+                _wheel["total"] += ctypes.c_short((info.mouseData >> 16) & 0xFFFF).value
+        return user32.CallNextHookEx(None, n_code, w_param, l_param)
+
+    callback = HOOKPROC(proc)
+    user32.SetWindowsHookExW(WH_MOUSE_LL, callback, kernel32.GetModuleHandleW(None), 0)
+    msg = wintypes.MSG()
+    while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
+        user32.TranslateMessage(ctypes.byref(msg))
+        user32.DispatchMessageW(ctypes.byref(msg))
+
+
+# ---------------------------------------------------------------------------
 # Flask app
 # ---------------------------------------------------------------------------
 
@@ -662,6 +727,27 @@ def after_request(response):
     response.headers.add("Access-Control-Allow-Headers", "Content-Type")
     response.headers.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
     return response
+
+
+@app.route("/api/wheel_stream", methods=["GET"])
+def api_wheel_stream():
+    def gen():
+        yield ": connected\n\n"
+        last = _wheel["total"]
+        ticks = 0
+        while True:
+            cur = _wheel["total"]
+            if cur != last:
+                diff = cur - last
+                last = cur
+                yield f"data: {diff}\n\n"
+            else:
+                ticks += 1
+                if ticks >= 500:
+                    ticks = 0
+                    yield ": ping\n\n"
+            time.sleep(0.02)
+    return Response(gen(), mimetype="text/event-stream", headers={"Cache-Control": "no-cache"})
 
 
 @app.route("/api/status", methods=["GET"])
@@ -831,7 +917,7 @@ if __name__ == "__main__":
     ensure_default_state()
     print(f"WM2026 Windows server starting - data dir: {BASE_DIR}")
     print(f"mpv: {MPV_BIN}")
-    for target in (stream_finder_loop, data_fetch_loop, comments_loop, commentary_loop, engine_loop):
+    for target in (stream_finder_loop, data_fetch_loop, comments_loop, commentary_loop, engine_loop, mouse_wheel_hook_loop):
         threading.Thread(target=target, daemon=True).start()
     print(f"Server listening on {SERVER_URL}")
-    app.run(host="127.0.0.1", port=SERVER_PORT, debug=False)
+    app.run(host="127.0.0.1", port=SERVER_PORT, debug=False, threaded=True)
